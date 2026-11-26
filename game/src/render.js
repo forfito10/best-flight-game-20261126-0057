@@ -22,6 +22,11 @@ function polygon(ctx, points, fill, stroke = null, width = 1) {
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); }
 }
 function seeded(n) { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); }
+const TERRAIN_PALETTES = [
+  { water: ['#398e9d','#378997','#337e91','#30778a','#2b7084','#296b7e'], bank: '#b3ae70', high: ['#637e5b','#617956','#5a704f','#53694a','#4a6045','#435942'], low: ['#579044','#548a40','#51843d','#4e803a','#4a7938','#477235'] },
+  { water: ['#3b9099','#398b94','#35828e','#327a87','#2e7381','#2b6d7a'], bank: '#b8ae72', high: ['#687e59','#657a54','#5f7250','#576b4b','#4f6246','#485b43'], low: ['#5a9042','#578b3f','#54843c','#51803a','#4d7938','#497334'] },
+  { water: ['#378c9e','#358797','#317e91','#2e778b','#2a7085','#286b7f'], bank: '#adb071', high: ['#607d5f','#5e7859','#587153','#516a4e','#496249','#435b45'], low: ['#568f49','#538945','#508341','#4d7e3e','#49783b','#457238'] },
+];
 
 function drawSky(ctx, s, bank) {
   const horizon = s.h * 0.385;
@@ -54,6 +59,7 @@ function drawSky(ctx, s, bank) {
 }
 
 function drawTerrain(ctx, s) {
+  const palette = TERRAIN_PALETTES[Math.floor(seeded((s.seed >>> 0) % 997 + 31) * TERRAIN_PALETTES.length)];
   const columns = [];
   for (let x = -880; x <= 880; x += 55) columns.push(x);
   const rows = [12];
@@ -71,10 +77,10 @@ function drawTerrain(ctx, s) {
       const height = (h00 + h10 + h01 + h11) * 0.25;
       const shade = clamp(Math.floor(height / 22), 0, 5);
       let color;
-      if (kind === 'water') color = ['#398e9d','#378997','#337e91','#30778a','#2b7084','#296b7e'][shade];
-      else if (kind === 'bank') color = '#b3ae70';
-      else if (height > 65) color = ['#637e5b','#617956','#5a704f','#53694a','#4a6045','#435942'][shade];
-      else color = ['#579044','#548a40','#51843d','#4e803a','#4a7938','#477235'][shade];
+      if (kind === 'water') color = palette.water[shade];
+      else if (kind === 'bank') color = palette.bank;
+      else if (height > 65) color = palette.high[shade];
+      else color = palette.low[shade];
       polygon(ctx, [a,b,c,d], color);
       // Faceted triangular slopes make the procedural ridges read as mountain faces.
       if (height > 82 && ((ci + ri) % 2 === 0)) {
@@ -155,6 +161,14 @@ function drawHud(ctx, s, game) {
   ctx.textAlign='center'; ctx.font=`${Math.max(10,s.w*.012)}px ui-monospace, monospace`; ctx.fillStyle='#d8e9dc';
   for(let d=Math.floor((heading-75)/10)*10; d<=heading+75; d+=10){const x=s.w*.5+(d-heading)*2.15;const norm=((d%360)+360)%360;ctx.strokeStyle='rgba(225,240,224,.76)';ctx.beginPath();ctx.moveTo(x,tapeY+20);ctx.lineTo(x,tapeY+(norm%30===0?33:27));ctx.stroke();if(norm%30===0)ctx.fillText(String(norm).padStart(3,'0'),x,tapeY+4);}
   ctx.restore(); ctx.fillStyle='#ffd85b'; ctx.beginPath(); ctx.moveTo(s.w*.5-6,tapeY+48);ctx.lineTo(s.w*.5+6,tapeY+48);ctx.lineTo(s.w*.5,tapeY+40);ctx.fill();
+  const headingBoxX = tapeX + tapeW + 7;
+  panel(ctx,headingBoxX,tapeY,64,50); ctx.textAlign='center'; ctx.fillStyle='#9fcbd0'; ctx.font=`bold ${Math.max(9,s.w*.01)}px ui-monospace, monospace`; ctx.fillText('HDG',headingBoxX+32,tapeY+7);
+  ctx.fillStyle='#fff4c2'; ctx.font=`bold ${Math.max(14,s.w*.016)}px ui-monospace, monospace`; ctx.fillText(`${String(Math.round(heading)%360).padStart(3,'0')}°`,headingBoxX+32,tapeY+25); ctx.textAlign='left';
+  const bankY=tapeY+57, bankW=106, bankX=s.w-pad-bankW, bankCenter=bankX+bankW*.5, bankAngle=Math.round(s.bank*180/Math.PI);
+  panel(ctx,bankX,bankY,bankW,39); ctx.strokeStyle='rgba(216,233,220,.7)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(bankCenter-31,bankY+11); ctx.lineTo(bankCenter+31,bankY+11); ctx.moveTo(bankCenter,bankY+8); ctx.lineTo(bankCenter,bankY+14); ctx.stroke();
+  for(const tick of [-30,-15,15,30]) { const tx=bankCenter+tick; ctx.beginPath(); ctx.moveTo(tx,bankY+9); ctx.lineTo(tx,bankY+13); ctx.stroke(); }
+  const pointerX=bankCenter+clamp(s.bank/(Math.PI/4),-1,1)*30; ctx.fillStyle='#ffd85b'; ctx.beginPath(); ctx.moveTo(pointerX-4,bankY+6); ctx.lineTo(pointerX+4,bankY+6); ctx.lineTo(pointerX,bankY+11); ctx.fill();
+  ctx.textAlign='center'; ctx.fillStyle='#fff4c2'; ctx.font=`bold ${Math.max(10,s.w*.011)}px ui-monospace, monospace`; ctx.fillText(`BANK ${bankAngle>=0?'+':''}${bankAngle}°`,bankCenter,bankY+19); ctx.textAlign='left';
   const scoreY=pad+72; panel(ctx,pad,scoreY,142,43);ctx.fillStyle='#9fcbd0';ctx.font=`bold ${Math.max(11,s.w*.012)}px ui-monospace, monospace`;ctx.fillText('LEDGER',pad+10,scoreY+6);ctx.fillStyle='#ffe56b';ctx.font=`bold ${Math.max(16,s.w*.019)}px ui-monospace, monospace`;ctx.fillText(String(game.score||0).padStart(5,'0'),pad+10,scoreY+22);
   ctx.textAlign='right';ctx.font=`${Math.max(10,s.w*.011)}px ui-monospace, monospace`;ctx.fillStyle='rgba(255,255,240,.83)';ctx.fillText('A/D OR ←/→ BANK   W/S PITCH   SHIFT/CTRL THROTTLE',s.w-pad,s.h-18);ctx.textAlign='left';
 }
